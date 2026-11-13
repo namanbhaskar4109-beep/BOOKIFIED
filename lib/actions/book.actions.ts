@@ -111,6 +111,12 @@ export const checkBookExists = async (title: string) => {
 
 export const getAllBooks = async () => {
     try {
+        if (!process.env.MONGODB_URI) {
+            return {
+                success: false,
+                data: [],
+            };
+        }
         await connectToDatabase();
         const books = await Book.find().sort({ createdAt: -1 }).lean();
         return {

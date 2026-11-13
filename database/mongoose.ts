@@ -1,10 +1,4 @@
 import mongoose from "mongoose";
-const MONGODB_URI = process.env.MONGODB_URI as string;
-if (!MONGODB_URI) {
-  throw new Error(
-    "Please define the MONGODB_URI environment variable inside .env.local"
-  );
-}
 
 declare global {
   var mongooseCache: {
@@ -13,27 +7,36 @@ declare global {
   };
 }
 
-
 let cached = global.mongooseCache || (global.mongooseCache = { conn: null, promise: null });
 
-
 export const connectToDatabase = async () => {
+  const MONGODB_URI = process.env.MONGODB_URI;
+
+  if (!MONGODB_URI) {
+    throw new Error(
+      "Please define the MONGODB_URI environment variable inside .env.local or production settings"
+    );
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-
-    cached.promise = mongoose.connect(MONGODB_URI, { bufferCommands: false });
+    cached.promise = mongoose.connect(MONGODB_URI, {
+      dbName: 'bookefy',
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 10000,
+    });
   }
+
   try {
     cached.conn = await cached.promise;
-  }
-  catch (e) {
+  } catch (e) {
     cached.promise = null;
-    console.log("Mongodb connection error please make sure mongodb is running");
-    throw e;;
+    console.error("MongoDB connection error:", e);
+    throw e;
   }
-  console.info("Mongodb connected successfully");
+
   return cached.conn;
-}
+};

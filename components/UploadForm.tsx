@@ -97,7 +97,12 @@ const UploadForm = () => {
             });
 
             if (!bookResult || !bookResult.success) {
-                toast.error(typeof bookResult?.error === 'string' ? bookResult.error : 'Failed to create book');
+                const err = typeof bookResult?.error === 'string' ? bookResult.error : 'Failed to create book';
+                if (err.includes('MongoDB') || err.includes('EREFUSED') || err.includes('ServerSelectionError')) {
+                    toast.error('Database connection failed. Please ensure your IP is whitelisted in MongoDB Atlas Network Access (0.0.0.0/0).');
+                } else {
+                    toast.error(err);
+                }
                 return;
             }
 
