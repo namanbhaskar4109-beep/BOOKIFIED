@@ -1,4 +1,13 @@
 import mongoose from "mongoose";
+import dns from "node:dns";
+
+// Fix for querySrv ECONNREFUSED on Windows / local ISP router DNS
+// Forces Node.js to resolve SRV records via Google & Cloudflare public DNS
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch {
+  // Ignore if restricted in specific environments
+}
 
 declare global {
   var mongooseCache: {

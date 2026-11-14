@@ -57,6 +57,12 @@ const UploadForm = () => {
         try {
             const existsCheck = await checkBookExists(data.title);
 
+            if (existsCheck.error) {
+                const err = typeof existsCheck.error === 'string' ? existsCheck.error : 'Database connection error';
+                toast.error(`Database error: ${err}`);
+                return;
+            }
+
             if (existsCheck.exists && existsCheck.book) {
                 toast.info('A book with this title already exists.');
                 form.reset();
@@ -126,7 +132,9 @@ const UploadForm = () => {
                 toast.success(`"${data.title}" added to your library!`);
             }
 
+            setLoadingStep('Redirecting to home page...');
             form.reset();
+            router.refresh();
             router.push('/');
         } catch (error) {
             console.error('Upload error:', error);
