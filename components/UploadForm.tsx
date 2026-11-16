@@ -55,7 +55,7 @@ const UploadForm = () => {
         setLoadingStep('Checking for existing books...');
 
         try {
-            const existsCheck = await checkBookExists(data.title);
+            const existsCheck = await checkBookExists(data.title, userId);
 
             if (existsCheck.error) {
                 const err = typeof existsCheck.error === 'string' ? existsCheck.error : 'Database connection error';

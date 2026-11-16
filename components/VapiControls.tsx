@@ -1,12 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
-import { Mic, MicOff, Square, Loader2, AlertCircle, X, FileText } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Mic, MicOff, Square, Loader2, AlertCircle, X, FileText, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useVapi, CallStatus } from '@/hooks/useVapi';
 import { formatDuration } from '@/lib/utils';
 import { IBook } from '@/types';
 import { cn } from '@/lib/utils';
+import { deleteBook } from '@/lib/actions/book.actions';
 import Transcript from '@/components/Transcript';
 
 interface VapiControlsProps {
@@ -27,6 +30,34 @@ export const VapiControls: React.FC<VapiControlsProps> = ({ book }) => {
     maxDurationSeconds,
     clearError,
   } = useVapi(book);
+
+  const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
+
+  const handleDeleteBook = async () => {
+    if (!book._id) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${book.title}" from your library? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await deleteBook(book._id);
+      if (res.success) {
+        toast.success(`"${book.title}" deleted from library`);
+        router.push('/');
+        router.refresh();
+      } else {
+        toast.error(res.error || 'Failed to delete book');
+      }
+    } catch (err) {
+      console.error('Error deleting book:', err);
+      toast.error('Failed to delete book');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const personaName = book.persona
     ? book.persona.charAt(0).toUpperCase() + book.persona.slice(1)
@@ -194,6 +225,24 @@ export const VapiControls: React.FC<VapiControlsProps> = ({ book }) => {
                 <FileText className="w-3.5 h-3.5 text-[#663820]" />
                 <span>PDF</span>
               </a>
+            )}
+
+            {/* Delete Book Button */}
+            {book._id && (
+              <button
+                type="button"
+                onClick={handleDeleteBook}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 bg-white hover:bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-xs font-medium shadow-xs transition-colors border border-transparent hover:border-red-200 cursor-pointer disabled:opacity-50"
+                title="Delete this book from library"
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                )}
+                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+              </button>
             )}
           </div>
         </div>

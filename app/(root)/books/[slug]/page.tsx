@@ -13,8 +13,9 @@ interface BookPageProps {
 }
 
 export async function generateMetadata({ params }: BookPageProps) {
+  const { userId } = await auth();
   const { slug } = await params;
-  const result = await getBookBySlug(slug);
+  const result = await getBookBySlug(slug, userId || undefined);
 
   if (!result.success || !result.data) {
     return { title: 'Book | Bookified' };
@@ -34,7 +35,7 @@ export default async function BookDetailsPage({ params }: BookPageProps) {
   }
 
   const { slug } = await params;
-  const result = await getBookBySlug(slug);
+  const result = await getBookBySlug(slug, userId);
 
   if (!result.success || !result.data) {
     redirect('/');

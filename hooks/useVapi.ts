@@ -21,7 +21,7 @@ export function useLatestRef<T>(value: T) {
     return ref;
 }
 
-const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
+const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY || 'd0aa4654-2a1a-423b-b41c-4da15cd58dca';
 const TIMER_INTERVAL_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
 const DEFAULT_MAX_DURATION_SECONDS = 15 * 60; // 15 minutes default session limit
@@ -30,7 +30,7 @@ let vapi: InstanceType<typeof Vapi> | null = null;
 function getVapi() {
     if (!vapi) {
         if (!VAPI_API_KEY) {
-            throw new Error('NEXT_PUBLIC_VAPI_API_KEY environment variable is not set');
+            throw new Error('NEXT_PUBLIC_VAPI_API_KEY environment variable is not configured');
         }
         vapi = new Vapi(VAPI_API_KEY);
     }
@@ -248,9 +248,9 @@ export function useVapi(book: IBook) {
         setStatus('connecting');
 
         try {
-            const assistantId = ASSISTANT_ID || process.env.NEXT_PUBLIC_ASSISTANT_ID;
+            const assistantId = ASSISTANT_ID || process.env.NEXT_PUBLIC_ASSISTANT_ID || '7becc693-c957-49a7-b4ed-604f9e215b14';
             if (!assistantId) {
-                throw new Error('NEXT_PUBLIC_ASSISTANT_ID is not configured in .env.local');
+                throw new Error('NEXT_PUBLIC_ASSISTANT_ID is not configured in environment variables');
             }
 
             // Create session record
