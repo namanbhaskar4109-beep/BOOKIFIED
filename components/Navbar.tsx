@@ -8,8 +8,9 @@ import { SignInButton, SignUpButton, Show, UserButton , useUser} from '@clerk/ne
 
 const navItems = [
   { label: 'Library', href: '/' },
-  { label: 'Add New', href: '/books/new' }
-]
+  { label: 'Add New', href: '/books/new' },
+  { label: 'Pricing', href: '/subscriptions' },
+];
 
 export const Navbar = () => {
   const pathname = usePathname();
@@ -31,7 +32,7 @@ export const Navbar = () => {
         <nav className="flex w-fit gap-7.5 items-center">
           {navItems.map(({ label, href }) => {
             const isActive = pathname === href ||
-              (href !== '/' && pathname.startsWith(href));
+              (href !== '/' && !!pathname?.startsWith(href));
             return (
               <Link
                 key={label}

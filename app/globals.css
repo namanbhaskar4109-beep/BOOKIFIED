@@ -958,32 +958,39 @@ button[data-variant='unstyled'] *,
   font-size: 1.125rem;
 }
 
-.clerk-pricing-container {
-  --cl-color-primary: var(--primary);
-  --cl-color-text: var(--foreground);
-  --cl-color-background: var(--background);
+.clerk-pricing-container,
+.pricing-table-container {
   width: 100%;
-  max-width: 1000px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
-/*!* Match the app's existing design system *!*/
-/*.clerk-pricing-container :deep(.cl-pricing-table) {*/
-/*  font-family: var(--font-mona-sans), sans-serif;*/
-/*}*/
+/* Match the app's existing warm literary design system */
+.pricing-table-container [data-clerk-pricing-plan-card],
+.pricing-table-container .cl-pricingPlanCard {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(33, 42, 59, 0.12) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
 
-/*.clerk-pricing-container :deep(.cl-pricing-table-header) {*/
-/*  font-family: var(--font-ibm-plex-serif), serif;*/
-/*}*/
+.pricing-table-container [data-clerk-pricing-plan-card]:hover,
+.pricing-table-container .cl-pricingPlanCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+}
 
-/*.clerk-pricing-container :deep(.cl-pricing-plan-card) {*/
-/*  border: 2px solid var(--border);*/
-/*  border-radius: 12px;*/
-/*  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1);*/
-/*  transition: transform 0.2s ease;*/
-/*}*/
+.pricing-table-container .cl-formButtonPrimary,
+.pricing-table-container button[data-variant="solid"] {
+  background-color: #212a3b !important;
+  color: #ffffff !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  transition: background-color 0.2s ease !important;
+}
 
-/*.clerk-pricing-container :deep(.cl-pricing-plan-card:hover) {*/
-/*  transform: translate(-2px, -2px);*/
-/*  box-shadow: 6px 6px 0px 0px rgba(0, 0, 0, 1);*/
-/*}*/
+.pricing-table-container .cl-formButtonPrimary:hover,
+.pricing-table-container button[data-variant="solid"]:hover {
+  background-color: #3d485e !important;
+}

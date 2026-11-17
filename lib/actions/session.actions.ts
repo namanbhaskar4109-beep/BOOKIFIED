@@ -3,6 +3,8 @@
 import { EndSessionResult, StartSessionResult } from "@/types";
 import { connectToDatabase } from "@/database/mongoose";
 import VoiceSession from "@/database/models/voice-session.model";
+import { getCurrentBillingPeriodStart } from "@/lib/subscription-constants";
+import { checkSessionLimit } from "@/lib/subscription.server";
 
 export const startVoiceSession = async (
     clerkId: string,
@@ -11,8 +13,19 @@ export const startVoiceSession = async (
     try {
         await connectToDatabase();
 
+        // Enforce monthly voice session limit based on Clerk Billing plan
+        const sessionCheck = await checkSessionLimit(clerkId);
+        if (!sessionCheck.allowed) {
+            return {
+                success: false,
+                error: sessionCheck.error || 'Monthly voice session limit reached.',
+                isBillingError: true,
+                maxDurationMinutes: sessionCheck.maxDurationMinutes,
+            };
+        }
+
         const now = new Date();
-        const billingPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const billingPeriodStart = getCurrentBillingPeriodStart();
 
         const session = await VoiceSession.create({
             clerkId,
@@ -25,7 +38,7 @@ export const startVoiceSession = async (
         return {
             success: true,
             sessionId: session._id.toString(),
-            maxDurationMinutes: 15,
+            maxDurationMinutes: sessionCheck.maxDurationMinutes,
         };
     } catch (e) {
         console.error('Error starting voice session', e);

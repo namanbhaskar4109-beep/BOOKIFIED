@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Vapi from '@vapi-ai/web';
 import { useAuth } from '@clerk/nextjs';
+import { useSubscription } from '@/hooks/useSubscription';
 
 import { ASSISTANT_ID, DEFAULT_VOICE, VOICE_SETTINGS } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
@@ -56,7 +57,10 @@ export function useVapi(book: IBook) {
     const isStoppingRef = useRef(false);
 
     // Keep refs in sync with latest values for use in callbacks
-    const maxDurationSeconds = DEFAULT_MAX_DURATION_SECONDS;
+    const { limits } = useSubscription();
+    const maxDurationSeconds = limits?.maxDurationPerSession
+        ? limits.maxDurationPerSession * 60
+        : DEFAULT_MAX_DURATION_SECONDS;
     const maxDurationRef = useLatestRef(maxDurationSeconds);
     const durationRef = useLatestRef(duration);
     const voice = book.persona || DEFAULT_VOICE;
@@ -86,8 +90,9 @@ export function useVapi(book: IBook) {
                             setLimitError(
                                 `Session time limit (${Math.floor(
                                     maxDurationRef.current / SECONDS_PER_MINUTE,
-                                )} minutes) reached.`,
+                                )} minutes) reached. Upgrade your plan for longer sessions.`,
                             );
+                            setIsBillingError(true);
                         }
                     }
                 }, TIMER_INTERVAL_MS);
@@ -258,6 +263,9 @@ export function useVapi(book: IBook) {
 
             if (!result.success) {
                 setLimitError(result.error || 'Failed to start session.');
+                if (result.isBillingError) {
+                    setIsBillingError(true);
+                }
                 setStatus('idle');
                 return;
             }

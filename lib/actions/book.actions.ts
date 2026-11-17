@@ -1,13 +1,14 @@
 'use server';
 
-import { CreateBook, TextSegment } from "@/types";
+import { CreateBook, CreateBookResult, TextSegment } from "@/types";
 import { connectToDatabase } from "@/database/mongoose";
 import { escapeRegex, generateSlug, serializeData } from "@/lib/utils";
 import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/book-segment.model";
 import { revalidatePath } from "next/cache";
+import { checkBookUploadLimit } from "@/lib/subscription.server";
 
-export const createBook = async (data: CreateBook) => {
+export const createBook = async (data: CreateBook): Promise<CreateBookResult> => {
     try {
         await connectToDatabase();
 
@@ -21,6 +22,16 @@ export const createBook = async (data: CreateBook) => {
                 success: true,
                 data: serializeData(existingUserBook),
                 alreadyExists: true,
+            };
+        }
+
+        // Enforce Clerk Billing plan limits on book uploads
+        const uploadCheck = await checkBookUploadLimit(data.clerkId);
+        if (!uploadCheck.allowed) {
+            return {
+                success: false,
+                error: uploadCheck.error,
+                isBillingError: true,
             };
         }
 
@@ -198,72 +209,6 @@ export const getBookBySlug = async (slug: string, clerkId?: string) => {
         success: false,
         error: 'Book not found',
     };
-};
-
-export const deleteBook = async (bookId: string) => {
-    try {
-        const { auth } = await import('@clerk/nextjs/server');
-        const { userId } = await auth();
-
-        if (!userId) {
-            return { success: false, error: 'Unauthorized: Please log in to delete books.' };
-        }
-
-        await connectToDatabase();
-
-        const book = await Book.findOne({ _id: bookId, clerkId: userId });
-        if (!book) {
-            return { success: false, error: 'Book not found or unauthorized.' };
-        }
-
-        // Clean up blobs from storage if available
-        if (process.env.BLOB_READ_WRITE_TOKEN) {
-            const blobsToDelete: string[] = [];
-            if (book.fileBlobKey) blobsToDelete.push(book.fileBlobKey);
-            else if (book.fileURL) blobsToDelete.push(book.fileURL);
-
-            if (book.coverBlobKey) blobsToDelete.push(book.coverBlobKey);
-            else if (
-                book.coverURL &&
-                !book.coverURL.startsWith('http://covers.openlibrary.org') &&
-                !book.coverURL.startsWith('https://covers.openlibrary.org')
-            ) {
-                blobsToDelete.push(book.coverURL);
-            }
-
-            if (blobsToDelete.length > 0) {
-                try {
-                    const { del } = await import('@vercel/blob');
-                    await del(blobsToDelete);
-                } catch (blobErr) {
-                    console.warn('Failed to delete blobs from storage:', blobErr);
-                }
-            }
-        }
-
-        // Delete associated voice sessions
-        try {
-            const VoiceSession = (await import('@/database/models/voice-session.model')).default;
-            await VoiceSession.deleteMany({ bookId });
-        } catch (e) {
-            console.warn('Error cleaning up voice sessions for book:', e);
-        }
-
-        // Delete associated book segments
-        await BookSegment.deleteMany({ bookId });
-
-        // Delete the book record
-        await Book.deleteOne({ _id: bookId, clerkId: userId });
-
-        revalidatePath('/');
-        return { success: true };
-    } catch (e) {
-        console.error('Error deleting book:', e);
-        return {
-            success: false,
-            error: e instanceof Error ? e.message : 'Failed to delete book',
-        };
-    }
 };
 
 export const searchBookSegments = async (bookId: string, query: string, limit: number = 5) => {

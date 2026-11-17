@@ -67,6 +67,14 @@ export interface CreateBook {
     fileSize: number;
 }
 
+export interface CreateBookResult {
+    success: boolean;
+    data?: any;
+    alreadyExists?: boolean;
+    error?: string;
+    isBillingError?: boolean;
+}
+
 export interface TextSegment {
     text: string;
     segmentIndex: number;
