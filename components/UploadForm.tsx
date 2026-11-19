@@ -16,8 +16,7 @@ import { useAuth } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import { checkBookExists, createBook, saveBookSegments } from '@/lib/actions/book.actions';
 import { useRouter } from 'next/navigation';
-import { parsePDFFile, uploadCoverBlob } from '@/lib/client-utils';
-import { upload } from '@vercel/blob/client';
+import { parsePDFFile, uploadFile, uploadCoverBlob } from '@/lib/client-utils';
 
 const UploadForm = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,11 +80,7 @@ const UploadForm = () => {
             const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
 
             setLoadingStep('Uploading PDF to storage...');
-            const uploadedPdfBlob = await upload(fileTitle, data.file, {
-                access: 'public',
-                handleUploadUrl: '/api/upload',
-                contentType: 'application/pdf',
-            });
+            const uploadedPdfBlob = await uploadFile(data.file, `${fileTitle}.pdf`);
 
             setLoadingStep('Uploading cover image...');
             const coverUrl = await uploadCoverBlob(fileTitle, data.coverImage, parsedPDF.cover);
@@ -147,11 +142,7 @@ const UploadForm = () => {
         } catch (error) {
             console.error('Upload error:', error);
             const msg = error instanceof Error ? error.message : String(error);
-            if (msg.includes('retrieve the client token') || msg.includes('BLOB_READ_WRITE_TOKEN')) {
-                toast.error('Vercel Blob token missing: Please set BLOB_READ_WRITE_TOKEN in .env.local');
-            } else {
-                toast.error(msg || 'Failed to upload book. Please try again later.');
-            }
+            toast.error(msg || 'Failed to upload book. Please try again later.');
         } finally {
             setIsSubmitting(false);
         }

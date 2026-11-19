@@ -1,6 +1,5 @@
 'use client';
 
-import { upload } from '@vercel/blob/client';
 import { splitIntoSegments } from '@/lib/utils';
 
 export async function parsePDFFile(file: File) {
@@ -63,30 +62,42 @@ export async function parsePDFFile(file: File) {
   }
 }
 
+export async function uploadFile(
+  fileOrBlob: File | Blob,
+  fileName: string,
+): Promise<{ url: string; pathname: string }> {
+  const formData = new FormData();
+  formData.append('file', fileOrBlob, fileName);
+
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `Upload failed with status ${res.status}`);
+  }
+
+  return await res.json();
+}
+
 export async function uploadCoverBlob(
   fileTitle: string,
   coverImage?: File,
   fallbackCoverDataUrl?: string,
 ): Promise<string> {
   if (coverImage) {
-    const uploadedCoverBlob = await upload(`${fileTitle}_cover.png`, coverImage, {
-      access: 'public',
-      handleUploadUrl: '/api/upload',
-      contentType: coverImage.type,
-    });
-    return uploadedCoverBlob.url;
+    const uploaded = await uploadFile(coverImage, `${fileTitle}_cover.png`);
+    return uploaded.url;
   }
 
   if (fallbackCoverDataUrl) {
     const response = await fetch(fallbackCoverDataUrl);
     const blob = await response.blob();
 
-    const uploadedCoverBlob = await upload(`${fileTitle}_cover.png`, blob, {
-      access: 'public',
-      handleUploadUrl: '/api/upload',
-      contentType: 'image/png',
-    });
-    return uploadedCoverBlob.url;
+    const uploaded = await uploadFile(blob, `${fileTitle}_cover.png`);
+    return uploaded.url;
   }
 
   throw new Error('No cover image or fallback cover data URL provided');
