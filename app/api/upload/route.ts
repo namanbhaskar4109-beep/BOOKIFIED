@@ -4,6 +4,8 @@ import type { HandleUploadBody } from '@vercel/blob/client';
 import * as path from 'path';
 import * as fs from 'fs';
 import { MAX_FILE_SIZE } from '@/lib/constants';
+import { connectToDatabase } from '@/database/mongoose';
+import mongoose from 'mongoose';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +22,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
         const contentType = request.headers.get('content-type') || '';
 
-        // 1. Handle multipart/form-data upload (Direct upload with Vercel Blob + Local Fallback)
+        // 1. Handle multipart/form-data upload (Direct upload with Vercel Blob + MongoDB GridFS Fallback)
         if (contentType.includes('multipart/form-data')) {
             const formData = await request.formData();
             const file = formData.get('file') as File | null;
@@ -54,25 +56,51 @@ export async function POST(request: Request): Promise<NextResponse> {
                     });
                 } catch (blobError) {
                     console.warn(
-                        'Vercel Blob upload failed. Falling back to local storage:',
+                        'Vercel Blob upload failed. Falling back to MongoDB GridFS storage:',
                         blobError
                     );
                 }
             }
 
-            // B) Local storage fallback (Works out-of-the-box without external cloud token)
-            const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-            await fs.promises.mkdir(uploadsDir, { recursive: true });
+            // B) Universal Serverless-safe fallback via MongoDB GridFS
+            // (Works on Vercel where the filesystem /var/task is strictly read-only)
+            await connectToDatabase();
+            const db = mongoose.connection.db;
 
             const ext = path.extname(file.name) || '';
             const baseName = path
                 .basename(file.name, ext)
                 .replace(/[^a-zA-Z0-9_-]/g, '_');
             const safeFileName = `${baseName}-${Date.now().toString(36)}${ext}`;
-            const filePath = path.join(uploadsDir, safeFileName);
 
-            const fileBuffer = Buffer.from(await file.arrayBuffer());
-            await fs.promises.writeFile(filePath, fileBuffer);
+            const arrayBuffer = await file.arrayBuffer();
+            const fileBuffer = Buffer.from(arrayBuffer);
+
+            if (db) {
+                const bucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'uploads' });
+                const uploadStream = bucket.openUploadStream(safeFileName, {
+                    contentType: file.type || (ext === '.pdf' ? 'application/pdf' : 'image/png'),
+                });
+
+                await new Promise((resolve, reject) => {
+                    uploadStream.end(fileBuffer, (err?: Error | null) => {
+                        if (err) reject(err);
+                        else resolve(true);
+                    });
+                });
+            }
+
+            // Optional: Also cache to local public/uploads ONLY if filesystem is writable (e.g. local dev)
+            try {
+                const publicDir = path.join(process.cwd(), 'public');
+                if (fs.existsSync(publicDir)) {
+                    const uploadsDir = path.join(publicDir, 'uploads');
+                    await fs.promises.mkdir(uploadsDir, { recursive: true });
+                    await fs.promises.writeFile(path.join(uploadsDir, safeFileName), fileBuffer);
+                }
+            } catch {
+                // Silently ignore filesystem errors on read-only environments like Vercel Serverless
+            }
 
             return NextResponse.json({
                 url: `/api/files/${safeFileName}`,
@@ -85,7 +113,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             if (!process.env.BLOB_READ_WRITE_TOKEN) {
                 return NextResponse.json(
                     {
-                        error: 'BLOB_READ_WRITE_TOKEN is not configured for client token generation. Please use direct multipart upload to /api/upload.',
+                        error: 'BLOB_READ_WRITE_TOKEN is not configured for client token generation.',
                     },
                     { status: 400 }
                 );
