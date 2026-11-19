@@ -32,14 +32,7 @@ export async function getUserPlan(): Promise<PlanType> {
       }
     }
 
-    // Check user publicMetadata for active subscription status
-    const { currentUser } = await import('@clerk/nextjs/server');
-    const user = await currentUser();
-    const metaPlan = user?.publicMetadata?.plan as PlanType | undefined;
-    if (metaPlan && (metaPlan === 'pro' || metaPlan === 'standard' || metaPlan === 'free')) {
-      return metaPlan;
-    }
-
+    // Only users with verified active subscriptions in Clerk receive paid tiers
     return 'free';
   } catch (error) {
     console.error('Error checking user plan with Clerk has():', error);

@@ -80,7 +80,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                 const bucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'uploads' });
                 const uploadStream = bucket.openUploadStream(safeFileName, {
                     contentType: file.type || (ext === '.pdf' ? 'application/pdf' : 'image/png'),
-                });
+                } as any);
 
                 await new Promise((resolve, reject) => {
                     uploadStream.end(fileBuffer, (err?: Error | null) => {

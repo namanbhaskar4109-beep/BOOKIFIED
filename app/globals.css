@@ -815,6 +815,13 @@
   gap: 20px !important;
 }
 
+@media (min-width: 768px) {
+  .clerk-pricing-table-wrapper > div,
+  .clerk-pricing-table-wrapper > div > div {
+    flex-wrap: nowrap !important;
+  }
+}
+
 /* Individual cards */
 .clerk-pricing-table-wrapper > div > div > div {
   position: relative;

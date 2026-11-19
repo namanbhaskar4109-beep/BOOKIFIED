@@ -26,10 +26,6 @@ export function useSubscription(): UseSubscriptionReturn {
       plan = 'pro';
     } else if (has && has({ plan: 'standard' })) {
       plan = 'standard';
-    } else if (user?.publicMetadata?.plan === 'pro') {
-      plan = 'pro';
-    } else if (user?.publicMetadata?.plan === 'standard') {
-      plan = 'standard';
     }
   }
 
