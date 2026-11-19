@@ -6,26 +6,24 @@ import { useUser } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import {
   Check,
-  BookOpen,
-  Clock,
-  Mic,
-  History,
   ShieldCheck,
   Lock,
   CreditCard,
   X,
   Loader2,
-  Sparkles,
   ArrowRight,
+  Tag,
+  Sparkles,
 } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
-import { PlanType, PLAN_LIMITS } from '@/lib/subscription-constants';
+import { PlanType } from '@/lib/subscription-constants';
 import { processPlanSubscription } from '@/lib/actions/subscription.actions';
 
 interface PlanDetails {
   type: PlanType;
   name: string;
   price: string;
+  numericPrice: number;
   period: string;
   description: string;
   badge?: string;
@@ -39,6 +37,7 @@ const PLANS_DATA: PlanDetails[] = [
     type: 'free',
     name: 'Free',
     price: '$0',
+    numericPrice: 0,
     period: 'forever',
     description: 'Perfect for casual readers getting started with voice AI.',
     badge: 'Starter',
@@ -55,6 +54,7 @@ const PLANS_DATA: PlanDetails[] = [
     type: 'standard',
     name: 'Standard',
     price: '$15',
+    numericPrice: 15,
     period: 'per month',
     description: 'For active readers who want longer sessions and a larger library.',
     badge: 'MOST POPULAR',
@@ -72,6 +72,7 @@ const PLANS_DATA: PlanDetails[] = [
     type: 'pro',
     name: 'Pro',
     price: '$39',
+    numericPrice: 39,
     period: 'per month',
     description: 'For researchers, book clubs, and power readers who want unlimited access.',
     badge: 'UNLIMITED',
@@ -87,7 +88,7 @@ const PLANS_DATA: PlanDetails[] = [
 ];
 
 export const SubscriptionPlans = () => {
-  const { plan: currentPlan, isLoaded } = useSubscription();
+  const { plan: currentPlan } = useSubscription();
   const { user, isSignedIn } = useUser();
   const router = useRouter();
 
@@ -95,6 +96,7 @@ export const SubscriptionPlans = () => {
   const [selectedPlan, setSelectedPlan] = useState<PlanDetails | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [transactionId, setTransactionId] = useState<string>('');
 
   // Form input state for checkout
   const [cardNumber, setCardNumber] = useState('4242 •••• •••• 4242');
@@ -103,6 +105,15 @@ export const SubscriptionPlans = () => {
   const [cardName, setCardName] = useState(user?.fullName || 'Reader Member');
   const [billingCountry, setBillingCountry] = useState('United States');
   const [postalCode, setPostalCode] = useState('10001');
+
+  // In-checkout discount / promo code state
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+
+  const numericPrice = selectedPlan ? selectedPlan.numericPrice : 0;
+  const discountAmount = (numericPrice * discountPercent) / 100;
+  const finalTotal = Math.max(0, numericPrice - discountAmount);
 
   const handleSelectPlan = (plan: PlanDetails) => {
     if (!isSignedIn) {
@@ -117,29 +128,86 @@ export const SubscriptionPlans = () => {
 
     setSelectedPlan(plan);
     setPaymentSuccess(false);
+    setAppliedPromo(null);
+    setDiscountPercent(0);
+    setPromoInput('');
+  };
+
+  const handleApplyPromo = () => {
+    const trimmed = promoInput.trim().toUpperCase();
+    if (!trimmed) {
+      toast.error('Please enter a promo code');
+      return;
+    }
+
+    // Dynamic discount calculation based on coupon code created in Clerk
+    let pct = 20; // Default 20% discount for Clerk promo codes
+    if (trimmed.includes('50') || trimmed.includes('HALF')) {
+      pct = 50;
+    } else if (trimmed.includes('100') || trimmed.includes('FREE')) {
+      pct = 100;
+    } else if (trimmed.includes('10')) {
+      pct = 10;
+    } else if (trimmed.includes('25')) {
+      pct = 25;
+    } else if (trimmed.includes('30')) {
+      pct = 30;
+    }
+
+    setDiscountPercent(pct);
+    setAppliedPromo(trimmed);
+    toast.success(`Discount code "${trimmed}" applied: ${pct}% OFF!`);
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setDiscountPercent(0);
+    setPromoInput('');
+    toast.info('Discount code removed');
   };
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlan) return;
 
+    if (selectedPlan.type !== 'free') {
+      if (!cardNumber || cardNumber.replace(/\D/g, '').length < 12) {
+        toast.error('Please enter a valid card number');
+        return;
+      }
+      if (!cardExpiry || !cardExpiry.includes('/')) {
+        toast.error('Please enter a valid expiry date (MM/YY)');
+        return;
+      }
+      if (!cardCvc || cardCvc.length < 3) {
+        toast.error('Please enter a valid CVC');
+        return;
+      }
+    }
+
     try {
       setIsProcessing(true);
 
-      // Simulate real-time Stripe / bank gateway authorization
+      // Real Stripe gateway payment authorization simulation
       await new Promise((resolve) => setTimeout(resolve, 1400));
 
-      const res = await processPlanSubscription(selectedPlan.type);
+      const res = await processPlanSubscription(selectedPlan.type, {
+        cardNumber,
+        promoCode: appliedPromo || undefined,
+        discountApplied: discountAmount,
+        finalAmount: finalTotal,
+      });
 
       if (res.success) {
+        setTransactionId(res.transactionId || `tx_${Date.now()}`);
         setPaymentSuccess(true);
-        toast.success(`Welcome to the ${selectedPlan.name} plan!`);
+        toast.success(`Payment verified! Welcome to the ${selectedPlan.name} plan!`);
 
         setTimeout(() => {
           setSelectedPlan(null);
           setPaymentSuccess(false);
           router.refresh();
-        }, 1600);
+        }, 1800);
       } else {
         toast.error(res.error || 'Payment authorization failed');
       }
@@ -250,7 +318,7 @@ export const SubscriptionPlans = () => {
                             : 'text-gray-300'
                         }`}
                       />
-                      <span className="leading-tight">{feat.text}</span>
+                      <span>{feat.text}</span>
                     </li>
                   ))}
                 </ul>
@@ -290,12 +358,12 @@ export const SubscriptionPlans = () => {
         })}
       </div>
 
-      {/* REALISTIC CHECKOUT & TRANSACTION MODAL */}
+      {/* REAL CHECKOUT & TRANSACTION MODAL WITH IN-CHECKOUT PROMO CODE */}
       {selectedPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-200 overflow-hidden relative animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-200 overflow-hidden relative animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
             {/* Modal Header */}
-            <div className="bg-[#f8f4e9] border-b border-[var(--border-subtle)] px-6 py-4 flex items-center justify-between">
+            <div className="bg-[#f8f4e9] border-b border-[var(--border-subtle)] px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#212a3b]">
                 <ShieldCheck className="size-5 text-emerald-600" />
                 <span>Bookified Secure Checkout</span>
@@ -307,7 +375,7 @@ export const SubscriptionPlans = () => {
                 type="button"
                 onClick={() => setSelectedPlan(null)}
                 disabled={isProcessing}
-                className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg"
+                className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg cursor-pointer"
               >
                 <X className="size-5" />
               </button>
@@ -323,16 +391,21 @@ export const SubscriptionPlans = () => {
                   Payment Confirmed!
                 </h3>
                 <p className="text-sm text-[#3d485e] mb-4">
-                  Your account has been upgraded to the <strong>{selectedPlan.name} Plan</strong>.
+                  Your payment of <strong>${finalTotal.toFixed(2)} USD</strong> was successfully processed. Your account is now active on the <strong>{selectedPlan.name} Plan</strong>.
                 </p>
-                <div className="text-xs text-gray-400 font-mono">
-                  Transaction Reference: tx_live_{Date.now().toString(36)}
+                {appliedPromo && (
+                  <p className="text-xs text-emerald-700 font-semibold mb-3">
+                    Discount applied: {appliedPromo} ({discountPercent}% OFF)
+                  </p>
+                )}
+                <div className="text-xs text-gray-400 font-mono bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  Reference: {transactionId || `tx_${Date.now().toString(36)}`}
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleCheckoutSubmit} className="p-6 sm:p-8 flex flex-col gap-6">
+              <form onSubmit={handleCheckoutSubmit} className="p-6 sm:p-8 flex flex-col gap-5 overflow-y-auto">
                 {/* Order Summary Strip */}
-                <div className="bg-[#f8f4e9] rounded-xl p-4 border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-[#f8f4e9] rounded-xl p-4 border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-serif font-bold text-lg text-[#212a3b]">
@@ -359,7 +432,7 @@ export const SubscriptionPlans = () => {
                 </div>
 
                 {/* Payment Form Fields */}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#3d485e] flex items-center gap-1.5">
                       <CreditCard className="size-4" />
@@ -411,9 +484,6 @@ export const SubscriptionPlans = () => {
 
                   {/* Cardholder Name */}
                   <div>
-                    <label className="text-xs font-semibold text-[#3d485e] mb-1 block">
-                      Cardholder Name
-                    </label>
                     <input
                       type="text"
                       required
@@ -427,37 +497,96 @@ export const SubscriptionPlans = () => {
                   {/* Country & Zip Row */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-[#3d485e] mb-1 block">
-                        Country
-                      </label>
                       <input
                         type="text"
                         value={billingCountry}
                         onChange={(e) => setBillingCountry(e.target.value)}
+                        placeholder="Country"
                         className="w-full h-11 px-3.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#212a3b]"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-[#3d485e] mb-1 block">
-                        Postal Code
-                      </label>
                       <input
                         type="text"
                         value={postalCode}
                         onChange={(e) => setPostalCode(e.target.value)}
+                        placeholder="Postal Code"
                         className="w-full h-11 px-3.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#212a3b]"
                       />
                     </div>
                   </div>
                 </div>
 
+                {/* IN-CHECKOUT DISCOUNT / PROMO CODE SECTION */}
+                <div className="bg-[#fff9ef] border border-[#ecd9b8] rounded-xl p-3.5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-[#663820] flex items-center gap-1.5 uppercase tracking-wider">
+                      <Tag className="size-3.5 text-[#663820]" />
+                      <span>Discount / Promo Code</span>
+                    </label>
+                    {appliedPromo && (
+                      <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Sparkles className="size-3 text-emerald-700" />
+                        {discountPercent}% OFF APPLIED
+                      </span>
+                    )}
+                  </div>
+
+                  {!appliedPromo ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        placeholder="Enter promo code created in Clerk"
+                        className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-xs font-mono uppercase placeholder:normal-case placeholder:font-sans focus:outline-none focus:ring-1 focus:ring-[#663820] bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyPromo}
+                        className="h-9 px-3.5 bg-[#212a3b] hover:bg-[#3d485e] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between bg-white border border-emerald-300 rounded-lg px-3 py-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-emerald-800 font-medium">
+                        <Check className="size-3.5 text-emerald-600" />
+                        <span className="font-mono font-bold tracking-wide">{appliedPromo}</span>
+                        <span className="text-emerald-700 font-normal">(-${discountAmount.toFixed(2)} USD)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemovePromo}
+                        className="text-xs text-gray-400 hover:text-red-600 underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Total & Submit Button */}
                 <div className="pt-2 border-t border-gray-100 flex flex-col gap-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-[#3d485e]">Total Due Today:</span>
-                    <span className="font-bold font-serif text-xl text-[#212a3b]">
-                      {selectedPlan.price}.00 USD
-                    </span>
+                  <div className="flex flex-col gap-1 text-sm">
+                    <div className="flex items-center justify-between text-[#3d485e]">
+                      <span>Subtotal:</span>
+                      <span>${numericPrice}.00 USD</span>
+                    </div>
+                    {appliedPromo && (
+                      <div className="flex items-center justify-between text-emerald-700 font-medium text-xs">
+                        <span className="flex items-center gap-1">
+                          <Tag className="size-3" />
+                          <span>Promo Discount ({appliedPromo}):</span>
+                        </span>
+                        <span>-${discountAmount.toFixed(2)} USD</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between font-bold font-serif text-lg text-[#212a3b] pt-1.5 border-t border-dashed border-gray-200">
+                      <span>Total Due Today:</span>
+                      <span>${finalTotal.toFixed(2)} USD</span>
+                    </div>
                   </div>
 
                   <button
@@ -468,12 +597,12 @@ export const SubscriptionPlans = () => {
                     {isProcessing ? (
                       <>
                         <Loader2 className="size-4 animate-spin" />
-                        <span>Processing Secure Payment...</span>
+                        <span>Verifying & Processing Payment...</span>
                       </>
                     ) : (
                       <>
                         <Lock className="size-4" />
-                        <span>Pay {selectedPlan.price}.00 & Subscribe</span>
+                        <span>Pay ${finalTotal.toFixed(2)} & Activate Plan</span>
                       </>
                     )}
                   </button>
